@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <RootNamespace>Acme.Services.VoucherManagementService.$(MSBuildProjectName)</RootNamespace>
+    <AssemblyName>Acme.Services.VoucherManagementService.$(MSBuildProjectName)</AssemblyName>
+  </PropertyGroup>
+</Project>
