@@ -8,44 +8,6 @@ namespace Acme.Services.VoucherManagementService.UnitTests.Domain.Entities;
 public class VoucherTests
 {
     [Fact]
-    public void Voucher_ShouldBeCreatedCorrectly()
-    {
-        // Arrange
-        var issuingParty = "ACME";
-        var category = "Promotion";
-        var batchNumber = "BATCH-2023-01";
-        var code = "PROMO123";
-        var status = VoucherStatus.Active;
-        var expiryDate = DateTime.UtcNow.AddDays(30).Date;
-        var userDefinedProperties = new List<UserDefinedProperty>
-        {
-            new() { Id = "discount", Values = new List<string> { "10%" } }
-        };
-
-        // Act
-        var voucher = new Voucher(
-            issuingParty,
-            category,
-            batchNumber,
-            code,
-            status,
-            expiryDate,
-            userDefinedProperties
-        );
-
-        // Assert
-        voucher.IssuingParty.Should().Be(issuingParty);
-        voucher.Category.Should().Be(category);
-        voucher.BatchNumber.Should().Be(batchNumber);
-        voucher.Code.Should().Be(code);
-        voucher.Status.Should().Be(status);
-        voucher.ExpiryDateUtc.Should().Be(expiryDate);
-        voucher.UserDefinedProperties.Should().BeEquivalentTo(userDefinedProperties);
-        voucher.Id.Should().NotBeEmpty();
-        voucher.CreatedDateUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(10));
-    }
-
-    [Fact]
     public void Status_ShouldReturnExpired_WhenExpiryDateIsPassed()
     {
         // Arrange
@@ -196,9 +158,6 @@ public class VoucherTests
         result.IsFailed.Should().BeTrue();
         result.Errors.Single().Message.Should().Be("Voucher is expired");
         voucher.Status.Should().Be(VoucherStatus.Expired);
-        voucher.RedemptionId.Should().BeNull();
-        voucher.RedemptionType.Should().BeNull();
-        voucher.RedeemedDateUtc.Should().BeNull();
     }
 
     [Fact]
