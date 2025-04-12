@@ -10,7 +10,7 @@ public static class MediatorExtension
     public static async Task<IActionResult> SendWithErrorHandling<TResponse, TError>(
         this IMediator mediator,
         IRequest<Result<TResponse>> request,
-        HttpStatusCode successCode = HttpStatusCode.OK) where TError : struct, Enum // Ensure TError is a non-nullable value type
+        HttpStatusCode successCode = HttpStatusCode.OK) where TError : Enum
     {
         var result = await mediator.Send(request);
 
@@ -28,19 +28,21 @@ public static class MediatorExtension
         }
 
         var error = result.Errors.FirstOrDefault();
-
+        
         if (error is FluentResults.IReason)
         {
+            var errorCode = error.Metadata.TryGetValue("ErrorCode", out var code) && code != null
+                ? Enum.Parse<TError>(code.ToString() ?? "0")
+                : default;
+
             var problemDetails = new ProblemDetails<TError>
             {
-                Status = error.Message.Contains("not found", StringComparison.OrdinalIgnoreCase)
-                    ? (int)HttpStatusCode.NotFound
+                Status = error.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) 
+                    ? (int)HttpStatusCode.NotFound 
                     : (int)HttpStatusCode.BadRequest,
                 Title = "Validation Error",
                 Detail = error.Message,
-                ErrorCode = Enum.TryParse<TError>(error.Metadata.GetValueOrDefault("ErrorCode")?.ToString(), out var parsedErrorCode)
-                    ? parsedErrorCode
-                    : default, // Use Enum.TryParse to safely parse the value
+                ErrorCode = errorCode,
                 TraceId = Guid.NewGuid().ToString()
             };
 
@@ -54,7 +56,7 @@ public static class MediatorExtension
     }
 }
 
-public class ProblemDetails<TError> where TError : struct, Enum // Ensure TError is a non-nullable value type
+public class ProblemDetails<TError> where TError : Enum
 {
     public int Status { get; set; }
     public string Title { get; set; } = string.Empty;
