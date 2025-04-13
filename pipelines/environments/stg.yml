@@ -1,0 +1,8 @@
+variables:
+  resourceGroupName: 'rg-voucherservice-stg'
+  appServiceName: 'app-voucherservice-stg'
+  cosmosDbAccountName: 'cosmos-voucherservice-stg'
+  cosmosDbDatabaseName: 'voucher-service'
+  cosmosDbContainerName: 'vouchers'
+  serviceBusNamespace: 'sb-voucherservice-stg'
+  serviceBusTopicName: 'voucher-redeemed'
