@@ -1,0 +1,98 @@
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+      - feature/*
+      - release/*
+  paths:
+    include:
+      - src/**
+      - tests/**
+      - pipelines/**
+      - Acme.Services.VoucherManagementService.sln
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - src/**
+      - tests/**
+      - pipelines/**
+      - Acme.Services.VoucherManagementService.sln
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  dotnetSdkVersion: '8.0.x'
+  projectName: 'Acme.Services.VoucherManagementService'
+  apiProjectPath: 'src/Api/Api.csproj'
+  testProjectPath: 'tests/UnitTests/UnitTests.csproj'
+
+stages:
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+  - job: BuildAndTest
+    displayName: 'Build, Test, and Publish'
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Use .NET SDK $(dotnetSdkVersion)'
+      inputs:
+        packageType: 'sdk'
+        version: '$(dotnetSdkVersion)'
+        
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet packages'
+      inputs:
+        command: 'restore'
+        projects: '$(projectName).sln'
+        feedsToUse: 'select'
+        
+    - task: DotNetCoreCLI@2
+      displayName: 'Build solution'
+      inputs:
+        command: 'build'
+        projects: '$(projectName).sln'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+        
+    - task: DotNetCoreCLI@2
+      displayName: 'Run unit tests'
+      inputs:
+        command: 'test'
+        projects: '$(testProjectPath)'
+        arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage" --results-directory $(Agent.TempDirectory)/TestResults'
+        
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish code coverage report'
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Agent.TempDirectory)/TestResults/**/coverage.cobertura.xml'
+        
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish API project'
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        projects: '$(apiProjectPath)'
+        arguments: '--configuration $(buildConfiguration) --no-build --output $(Build.ArtifactStagingDirectory)/api'
+        zipAfterPublish: true
+        
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish API artifact'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/api'
+        ArtifactName: 'api'
+        publishLocation: 'Container'
+        
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish pipeline templates'
+      inputs:
+        PathtoPublish: 'pipelines'
+        ArtifactName: 'pipelines'
+        publishLocation: 'Container'
