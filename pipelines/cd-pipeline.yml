@@ -1,0 +1,94 @@
+trigger: none
+pr: none
+
+resources:
+  pipelines:
+  - pipeline: CI_Pipeline
+    source: $(ciPipelineName)
+    trigger:
+      branches:
+        include:
+          - main
+          - develop
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - name: ciPipelineName
+    value: 'Acme.Services.VoucherManagementService-CI'
+
+stages:
+- stage: DeployDev
+  displayName: 'Deploy to Development'
+  variables:
+  - template: environments/dev.yml
+  jobs:
+  - deployment: DeployDev
+    displayName: 'Deploy to Development'
+    environment: 'development'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: CI_Pipeline
+            displayName: 'Download build artifacts'
+            artifact: 'api'
+            
+          - template: templates/deploy-template.yml
+            parameters:
+              environmentName: 'dev'
+              resourceGroupName: '$(resourceGroupName)'
+              appServiceName: '$(appServiceName)'
+              cosmosDbAccountName: '$(cosmosDbAccountName)'
+              serviceBusNamespace: '$(serviceBusNamespace)'
+
+- stage: DeployStaging
+  displayName: 'Deploy to Staging'
+  dependsOn: DeployDev
+  variables:
+  - template: environments/stg.yml
+  jobs:
+  - deployment: DeployStaging
+    displayName: 'Deploy to Staging'
+    environment: 'staging'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: CI_Pipeline
+            displayName: 'Download build artifacts'
+            artifact: 'api'
+            
+          - template: templates/deploy-template.yml
+            parameters:
+              environmentName: 'stg'
+              resourceGroupName: '$(resourceGroupName)'
+              appServiceName: '$(appServiceName)'
+              cosmosDbAccountName: '$(cosmosDbAccountName)'
+              serviceBusNamespace: '$(serviceBusNamespace)'
+
+- stage: DeployProduction
+  displayName: 'Deploy to Production'
+  dependsOn: DeployStaging
+  variables:
+  - template: environments/prod.yml
+  jobs:
+  - deployment: DeployProduction
+    displayName: 'Deploy to Production'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: CI_Pipeline
+            displayName: 'Download build artifacts'
+            artifact: 'api'
+            
+          - template: templates/deploy-template.yml
+            parameters:
+              environmentName: 'prod'
+              resourceGroupName: '$(resourceGroupName)'
+              appServiceName: '$(appServiceName)'
+              cosmosDbAccountName: '$(cosmosDbAccountName)'
+              serviceBusNamespace: '$(serviceBusNamespace)'
