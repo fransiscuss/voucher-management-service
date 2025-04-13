@@ -1,0 +1,82 @@
+parameters:
+  environmentName: ''
+  resourceGroupName: ''
+  appServiceName: ''
+  cosmosDbAccountName: ''
+  serviceBusNamespace: ''
+
+steps:
+- task: AzureAppServiceManage@0
+  displayName: 'Swap Slot: ${{ parameters.appServiceName }}'
+  condition: eq('${{ parameters.environmentName }}', 'prod')
+  inputs:
+    azureSubscription: 'acme-azure-subscription'
+    Action: 'Swap Slots'
+    WebAppName: '${{ parameters.appServiceName }}'
+    ResourceGroupName: '${{ parameters.resourceGroupName }}'
+    SourceSlot: 'staging'
+    SwapWithProduction: true
+
+- task: AzureRmWebAppDeployment@4
+  displayName: 'Deploy App Service: ${{ parameters.appServiceName }}'
+  condition: ne('${{ parameters.environmentName }}', 'prod')
+  inputs:
+    ConnectionType: 'AzureRM'
+    azureSubscription: 'acme-azure-subscription'
+    appType: 'webApp'
+    WebAppName: '${{ parameters.appServiceName }}'
+    ResourceGroupName: '${{ parameters.resourceGroupName }}'
+    deployToSlotOrASE: true
+    SlotName: 'staging'
+    packageForLinux: '$(Pipeline.Workspace)/CI_Pipeline/api/*.zip'
+    AppSettings: |
+      -CosmosDb:DocumentEndpoint "https://${{ parameters.cosmosDbAccountName }}.documents.azure.com:443/"
+      -ServiceBus:VoucherRedeemConnectionString "Endpoint=sb://${{ parameters.serviceBusNamespace }}.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=$(ServiceBusSharedAccessKey)"
+      -ApplicationInsights:ConnectionString "$(ApplicationInsightsConnectionString)"
+      -Authentication:ApiKey "$(ApiKey)"
+
+- task: AzureCLI@2
+  displayName: 'Initialize Cosmos DB'
+  condition: eq('${{ parameters.environmentName }}', 'dev')
+  inputs:
+    azureSubscription: 'acme-azure-subscription'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      # Check if database exists
+      DB_EXISTS=$(az cosmosdb sql database show --account-name ${{ parameters.cosmosDbAccountName }} --name $(CosmosDbDatabaseName) --resource-group ${{ parameters.resourceGroupName }} --query "id" -o tsv 2>/dev/null || echo "not_found")
+      
+      if [ "$DB_EXISTS" == "not_found" ]; then
+        echo "Creating database $(CosmosDbDatabaseName)..."
+        az cosmosdb sql database create --account-name ${{ parameters.cosmosDbAccountName }} --name $(CosmosDbDatabaseName) --resource-group ${{ parameters.resourceGroupName }}
+      else
+        echo "Database $(CosmosDbDatabaseName) already exists"
+      fi
+      
+      # Check if container exists
+      CONTAINER_EXISTS=$(az cosmosdb sql container show --account-name ${{ parameters.cosmosDbAccountName }} --database-name $(CosmosDbDatabaseName) --name $(CosmosDbContainerName) --resource-group ${{ parameters.resourceGroupName }} --query "id" -o tsv 2>/dev/null || echo "not_found")
+      
+      if [ "$CONTAINER_EXISTS" == "not_found" ]; then
+        echo "Creating container $(CosmosDbContainerName)..."
+        az cosmosdb sql container create --account-name ${{ parameters.cosmosDbAccountName }} --database-name $(CosmosDbDatabaseName) --name $(CosmosDbContainerName) --partition-key-path "/id" --throughput 400 --resource-group ${{ parameters.resourceGroupName }}
+      else
+        echo "Container $(CosmosDbContainerName) already exists"
+      fi
+
+- task: AzureCLI@2
+  displayName: 'Initialize Service Bus'
+  condition: eq('${{ parameters.environmentName }}', 'dev')
+  inputs:
+    azureSubscription: 'acme-azure-subscription'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      # Check if topic exists
+      TOPIC_EXISTS=$(az servicebus topic show --namespace-name ${{ parameters.serviceBusNamespace }} --name $(ServiceBusTopicName) --resource-group ${{ parameters.resourceGroupName }} --query "name" -o tsv 2>/dev/null || echo "not_found")
+      
+      if [ "$TOPIC_EXISTS" == "not_found" ]; then
+        echo "Creating topic $(ServiceBusTopicName)..."
+        az servicebus topic create --namespace-name ${{ parameters.serviceBusNamespace }} --name $(ServiceBusTopicName) --resource-group ${{ parameters.resourceGroupName }}
+      else
+        echo "Topic $(ServiceBusTopicName) already exists"
+      fi
