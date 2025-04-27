@@ -1,35 +1,41 @@
 using System.Text.Json.Serialization;
+using Acme.Services.VoucherManagementService.Api.Extensions;
+using Acme.Services.VoucherManagementService.Api.Middlewares;
+using Acme.Services.VoucherManagementService.Application;
+using Acme.Services.VoucherManagementService.Infrastructure;
 using Asp.Versioning;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers(options =>
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    });
+
+// Add API versioning
+builder.Services.AddApiVersioning(options =>
 {
-    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
-})
-.AddJsonOptions(x =>
-{
-    x.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
-    x.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = new HeaderApiVersionReader("X-API-Version");
 });
 
-// Configure API versioning
-builder.Services.AddApiVersioning(config =>
-{
-    config.DefaultApiVersion = new ApiVersion(1, 0);
-    config.AssumeDefaultVersionWhenUnspecified = true;
-});
+// Add Swagger services
+builder.Services.AddSwaggerConfiguration(builder.Configuration);
 
-// Add ApplicationInsights
-builder.Services.AddApplicationInsightsTelemetry();
+// Add Application and Infrastructure layers
+builder.Services.AddApplication(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration);
 
-// Add Swagger
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+// Add Application Insights
+builder.Services.AddApplicationInsightsTelemetry(options =>
 {
-    c.SwaggerDoc("v1", new() { Title = "Voucher Management Service API", Version = "v1" });
-    c.EnableAnnotations();
+    options.EnableAdaptiveSampling = false;
 });
 
 var app = builder.Build();
@@ -38,8 +44,16 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Voucher Management Service API v1");
+        c.RoutePrefix = "swagger";
+    });
 }
+
+// Add custom middlewares
+app.UseExceptionHandling();
+app.UseApiKeyAuthentication();
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
